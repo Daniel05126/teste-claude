@@ -1,0 +1,308 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Vier gewinnt</title>
+  <style>
+    :root {
+      --creme: #FFF8EE;
+      --text: #3B2A1E;
+      --text-leise: #6B5545;
+      --kruste: #A34E12;
+      --brett: #8A4A1C;
+      --loch: #FFF8EE;
+      --rot: #C8361E;
+      --gelb: #E9B949;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      background: var(--creme);
+      color: var(--text);
+      font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      line-height: 1.5;
+    }
+
+    .inhalt {
+      max-width: 520px;
+      margin: 0 auto;
+      padding: 24px 16px 40px;
+      text-align: center;
+    }
+
+    h1 {
+      font-family: Georgia, "Times New Roman", serif;
+      margin: 0 0 12px;
+      font-size: 2.2rem;
+    }
+
+    .steuerung {
+      display: flex;
+      gap: 8px;
+      justify-content: center;
+      flex-wrap: wrap;
+      margin-bottom: 16px;
+    }
+
+    button {
+      font: inherit;
+      font-weight: 700;
+      border-radius: 10px;
+      padding: 10px 16px;
+      cursor: pointer;
+      border: 2px solid var(--kruste);
+      background: transparent;
+      color: var(--kruste);
+    }
+    button.aktiv { background: var(--kruste); color: #fff; }
+    button.voll { background: var(--text); border-color: var(--text); color: #fff; }
+    button:focus-visible { outline: 3px solid var(--gelb); outline-offset: 2px; }
+
+    #status {
+      font-size: 1.2rem;
+      font-weight: 700;
+      min-height: 1.8em;
+      margin-bottom: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+    }
+    .punkt {
+      display: inline-block;
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+    }
+
+    #brett {
+      display: grid;
+      grid-template-columns: repeat(7, 1fr);
+      gap: 6px;
+      padding: 8px;
+      background: var(--brett);
+      border-radius: 14px;
+      touch-action: manipulation;
+    }
+
+    .feld {
+      aspect-ratio: 1;
+      border-radius: 50%;
+      background: var(--loch);
+      border: 0;
+      padding: 0;
+      cursor: pointer;
+    }
+    .feld.rot { background: var(--rot); }
+    .feld.gelb { background: var(--gelb); }
+    .feld.sieg { box-shadow: inset 0 0 0 4px #fff, 0 0 0 3px var(--text); }
+    .feld.neu { animation: fallen 0.3s ease-in; }
+    @keyframes fallen {
+      from { transform: translateY(-120%); opacity: 0.4; }
+      to { transform: translateY(0); opacity: 1; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .feld.neu { animation: none; }
+    }
+
+    #brett.vorbei .feld { cursor: default; }
+
+    .hinweis {
+      color: var(--text-leise);
+      font-size: 0.95rem;
+      margin-top: 16px;
+    }
+    .hinweis a { color: var(--kruste); }
+  </style>
+</head>
+<body>
+  <div class="inhalt">
+    <h1>Vier gewinnt</h1>
+
+    <div class="steuerung" role="group" aria-label="Spielmodus">
+      <button id="modus-2" class="aktiv" type="button">2 Spieler</button>
+      <button id="modus-pc" type="button">Gegen Computer</button>
+      <button id="neu" class="voll" type="button">Neues Spiel</button>
+    </div>
+
+    <div id="status" aria-live="polite"></div>
+
+    <div id="brett" role="grid" aria-label="Spielbrett, 7 Spalten"></div>
+
+    <p class="hinweis">Tippe auf eine Spalte, um einen Stein einzuwerfen. Wer zuerst vier in einer Reihe hat – waagerecht, senkrecht oder diagonal – gewinnt.</p>
+    <p class="hinweis"><a href="./">Zurück zu Sonnenbrot</a></p>
+  </div>
+
+  <script>
+    const ZEILEN = 6;
+    const SPALTEN = 7;
+    const NAMEN = { rot: "Rot", gelb: "Gelb" };
+
+    const brettEl = document.getElementById("brett");
+    const statusEl = document.getElementById("status");
+    const modus2 = document.getElementById("modus-2");
+    const modusPc = document.getElementById("modus-pc");
+
+    let brett, amZug, vorbei, gegenPc, pcDenkt, pcTimer;
+    const felder = [];
+
+    // Felder einmal anlegen; Zeile 0 ist oben
+    for (let z = 0; z < ZEILEN; z++) {
+      felder.push([]);
+      for (let s = 0; s < SPALTEN; s++) {
+        const f = document.createElement("button");
+        f.type = "button";
+        f.className = "feld";
+        f.addEventListener("click", () => spielerZug(s));
+        brettEl.appendChild(f);
+        felder[z].push(f);
+      }
+    }
+
+    function neuesSpiel() {
+      brett = Array.from({ length: ZEILEN }, () => Array(SPALTEN).fill(null));
+      amZug = "rot";
+      vorbei = false;
+      pcDenkt = false;
+      clearTimeout(pcTimer);
+      brettEl.classList.remove("vorbei");
+      for (let z = 0; z < ZEILEN; z++) {
+        for (let s = 0; s < SPALTEN; s++) zeichneFeld(z, s);
+      }
+      zeigeStatus();
+    }
+
+    function zeichneFeld(z, s, neu) {
+      const f = felder[z][s];
+      const farbe = brett[z][s];
+      f.className = "feld" + (farbe ? " " + farbe : "") + (neu ? " neu" : "");
+      f.setAttribute("aria-label", `Spalte ${s + 1}, Reihe ${ZEILEN - z}: ${farbe ? NAMEN[farbe] : "leer"}`);
+    }
+
+    function zeigeStatus(text) {
+      const farbe = text ? null : amZug;
+      statusEl.innerHTML = "";
+      if (farbe) {
+        const p = document.createElement("span");
+        p.className = "punkt";
+        p.style.background = `var(--${farbe})`;
+        statusEl.appendChild(p);
+        const wer = gegenPc && farbe === "gelb" ? "Computer denkt …" : `${NAMEN[farbe]} ist am Zug`;
+        statusEl.appendChild(document.createTextNode(wer));
+      } else {
+        statusEl.textContent = text;
+      }
+    }
+
+    function freieZeile(b, s) {
+      for (let z = ZEILEN - 1; z >= 0; z--) if (!b[z][s]) return z;
+      return -1;
+    }
+
+    // Liefert die vier Gewinnfelder oder null
+    function siegReihe(b, z, s) {
+      const farbe = b[z][s];
+      const richtungen = [[0, 1], [1, 0], [1, 1], [1, -1]];
+      for (const [dz, ds] of richtungen) {
+        const reihe = [[z, s]];
+        for (const r of [1, -1]) {
+          let zz = z + dz * r, ss = s + ds * r;
+          while (zz >= 0 && zz < ZEILEN && ss >= 0 && ss < SPALTEN && b[zz][ss] === farbe) {
+            reihe.push([zz, ss]);
+            zz += dz * r;
+            ss += ds * r;
+          }
+        }
+        if (reihe.length >= 4) return reihe;
+      }
+      return null;
+    }
+
+    function wirf(s) {
+      const z = freieZeile(brett, s);
+      if (z < 0) return false;
+      brett[z][s] = amZug;
+      zeichneFeld(z, s, true);
+
+      const reihe = siegReihe(brett, z, s);
+      if (reihe) {
+        reihe.forEach(([rz, rs]) => felder[rz][rs].classList.add("sieg"));
+        const sieger = gegenPc ? (amZug === "rot" ? "Du hast gewonnen! 🎉" : "Der Computer hat gewonnen.") : `${NAMEN[amZug]} hat gewonnen! 🎉`;
+        beende(sieger);
+      } else if (brett[0].every(Boolean)) {
+        beende("Unentschieden – das Brett ist voll.");
+      } else {
+        amZug = amZug === "rot" ? "gelb" : "rot";
+        zeigeStatus();
+      }
+      return true;
+    }
+
+    function beende(text) {
+      vorbei = true;
+      brettEl.classList.add("vorbei");
+      zeigeStatus(text);
+    }
+
+    function spielerZug(s) {
+      if (vorbei || pcDenkt) return;
+      if (!wirf(s)) return;
+      if (gegenPc && !vorbei) {
+        pcDenkt = true;
+        pcTimer = setTimeout(() => {
+          pcDenkt = false;
+          wirf(computerSpalte());
+        }, 450);
+      }
+    }
+
+    // Einfacher Gegner: gewinnen, sonst blocken, sonst keinen Sieg vorlegen, Mitte bevorzugen
+    function computerSpalte() {
+      const offen = [];
+      for (let s = 0; s < SPALTEN; s++) if (freieZeile(brett, s) >= 0) offen.push(s);
+
+      const gewinntMit = (farbe, s) => {
+        const z = freieZeile(brett, s);
+        brett[z][s] = farbe;
+        const sieg = !!siegReihe(brett, z, s);
+        brett[z][s] = null;
+        return sieg;
+      };
+
+      for (const s of offen) if (gewinntMit("gelb", s)) return s;
+      for (const s of offen) if (gewinntMit("rot", s)) return s;
+
+      // Spalten meiden, in denen Rot direkt darüber gewinnen könnte
+      const sicher = offen.filter(s => {
+        const z = freieZeile(brett, s);
+        if (z === 0) return true;
+        brett[z][s] = "gelb";
+        const gefahr = gewinntMit("rot", s);
+        brett[z][s] = null;
+        return !gefahr;
+      });
+      const auswahl = sicher.length ? sicher : offen;
+      auswahl.sort((a, b) => Math.abs(a - 3) - Math.abs(b - 3) || Math.random() - 0.5);
+      // Etwas Zufall unter den besten Spalten
+      const top = auswahl.slice(0, Math.min(2, auswahl.length));
+      return top[Math.floor(Math.random() * top.length)];
+    }
+
+    function setzeModus(pc) {
+      gegenPc = pc;
+      modus2.classList.toggle("aktiv", !pc);
+      modusPc.classList.toggle("aktiv", pc);
+      neuesSpiel();
+    }
+
+    modus2.addEventListener("click", () => setzeModus(false));
+    modusPc.addEventListener("click", () => setzeModus(true));
+    document.getElementById("neu").addEventListener("click", neuesSpiel);
+
+    setzeModus(false);
+  </script>
+</body>
+</html>
