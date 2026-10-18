@@ -1,0 +1,232 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Sonnenbrot – Ihre Bäckerei</title>
+  <meta name="description" content="Bäckerei Sonnenbrot: handwerklich gebacken, jeden Tag frisch. Öffnungszeiten, Brot der Woche und Kontakt.">
+  <style>
+    :root {
+      --creme: #FFF8EE;
+      --karte: #FFFFFF;
+      --text: #3B2A1E;
+      --text-leise: #6B5545;
+      --kruste: #A34E12;      /* Akzent für Text, kontraststark */
+      --orange: #C8641E;      /* Akzent für Flächen und Linien */
+      --honig: #FBE3A6;
+      --honig-rand: #E9B949;
+      --linie: #EADBC8;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      background: var(--creme);
+      color: var(--text);
+      font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      font-size: 1.0625rem;
+      line-height: 1.6;
+    }
+
+    h1, h2, h3 {
+      font-family: Georgia, "Times New Roman", serif;
+      line-height: 1.2;
+      margin: 0 0 0.5em;
+    }
+
+    a { color: var(--kruste); }
+
+    .inhalt {
+      max-width: 960px;
+      margin: 0 auto;
+      padding: 0 16px;
+    }
+
+    /* Kopfbereich */
+    header {
+      background: linear-gradient(180deg, #FBD99B 0%, var(--creme) 100%);
+      text-align: center;
+      padding: 40px 0 32px;
+    }
+    header svg { width: 72px; height: 72px; }
+    header h1 {
+      font-size: clamp(2.25rem, 9vw, 3.5rem);
+      margin: 8px 0 4px;
+      color: var(--text);
+    }
+    header p {
+      margin: 0;
+      font-size: 1.15rem;
+      color: var(--text-leise);
+    }
+
+    main { padding: 8px 0 40px; }
+
+    section {
+      background: var(--karte);
+      border: 1px solid var(--linie);
+      border-radius: 16px;
+      padding: 24px 20px;
+      margin-top: 20px;
+    }
+    section h2 {
+      font-size: 1.6rem;
+      color: var(--kruste);
+    }
+
+    /* Brot der Woche */
+    .brot-der-woche {
+      background: var(--honig);
+      border: 2px solid var(--honig-rand);
+    }
+    .brot-der-woche .etikett {
+      display: inline-block;
+      background: var(--orange);
+      color: #fff;
+      font-weight: 700;
+      font-size: 0.85rem;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      padding: 4px 12px;
+      border-radius: 999px;
+      margin-bottom: 12px;
+    }
+    .brot-der-woche h2 { color: var(--text); font-size: 1.9rem; }
+    .brot-der-woche .preis {
+      font-family: Georgia, "Times New Roman", serif;
+      font-size: 1.5rem;
+      font-weight: 700;
+      color: var(--kruste);
+      margin: 12px 0 0;
+    }
+
+    /* Öffnungszeiten */
+    table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+    th, td {
+      text-align: left;
+      padding: 10px 0;
+      border-bottom: 1px solid var(--linie);
+    }
+    th { font-weight: 600; }
+    td { text-align: right; }
+    tr:last-child th, tr:last-child td { border-bottom: 0; }
+    .geschlossen { color: var(--text-leise); font-style: italic; }
+
+    /* Kontakt */
+    address { font-style: normal; margin-bottom: 16px; }
+    .knopf {
+      display: block;
+      text-align: center;
+      text-decoration: none;
+      font-weight: 700;
+      padding: 14px 20px;
+      border-radius: 12px;
+      margin-top: 12px;
+    }
+    .knopf-voll { background: var(--kruste); color: #fff; }
+    .knopf-rand { border: 2px solid var(--kruste); color: var(--kruste); }
+    .knopf:focus-visible { outline: 3px solid var(--honig-rand); outline-offset: 2px; }
+
+    footer {
+      text-align: center;
+      color: var(--text-leise);
+      font-size: 0.95rem;
+      padding: 24px 0 40px;
+      border-top: 1px solid var(--linie);
+    }
+    footer p { margin: 4px 0; }
+
+    /* Ab Tablet-Breite: Öffnungszeiten und Kontakt nebeneinander */
+    @media (min-width: 720px) {
+      .spalten {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 20px;
+      }
+      .spalten section { margin-top: 20px; }
+      section { padding: 28px; }
+      .knopf { display: inline-block; margin-right: 8px; }
+    }
+  </style>
+</head>
+<body>
+
+  <header>
+    <div class="inhalt">
+      <svg viewBox="0 0 64 64" aria-hidden="true">
+        <g stroke="#C8641E" stroke-width="4" stroke-linecap="round">
+          <line x1="32" y1="4" x2="32" y2="12"/>
+          <line x1="32" y1="52" x2="32" y2="60"/>
+          <line x1="4" y1="32" x2="12" y2="32"/>
+          <line x1="52" y1="32" x2="60" y2="32"/>
+          <line x1="12.2" y1="12.2" x2="17.9" y2="17.9"/>
+          <line x1="46.1" y1="46.1" x2="51.8" y2="51.8"/>
+          <line x1="12.2" y1="51.8" x2="17.9" y2="46.1"/>
+          <line x1="46.1" y1="17.9" x2="51.8" y2="12.2"/>
+        </g>
+        <circle cx="32" cy="32" r="14" fill="#E9B949" stroke="#C8641E" stroke-width="3"/>
+      </svg>
+      <h1>Sonnenbrot</h1>
+      <p>Handwerklich gebacken, jeden Tag frisch.</p>
+    </div>
+  </header>
+
+  <main class="inhalt">
+
+    <!-- ===== BROT DER WOCHE: hier jede Woche Name, Beschreibung und Preis ändern ===== -->
+    <section class="brot-der-woche" aria-labelledby="bdw-titel">
+      <span class="etikett">Brot der Woche</span>
+      <h2 id="bdw-titel">Dinkel-Walnuss-Laib</h2>
+      <p>Saftiges Dinkelbrot mit gerösteten Walnüssen und einem Hauch Honig. Lange Teigführung über Nacht, kräftig ausgebacken mit knuspriger Kruste.</p>
+      <p class="preis">750 g · 5,20 €</p>
+    </section>
+    <!-- ===== ENDE BROT DER WOCHE ===== -->
+
+    <div class="spalten">
+
+      <!-- ===== ÖFFNUNGSZEITEN: Platzhalter, bitte anpassen ===== -->
+      <section aria-labelledby="zeiten-titel">
+        <h2 id="zeiten-titel">Öffnungszeiten</h2>
+        <table>
+          <tbody>
+            <tr><th scope="row">Montag</th><td class="geschlossen">Geschlossen</td></tr>
+            <tr><th scope="row">Dienstag</th><td>6:30 – 18:00 Uhr</td></tr>
+            <tr><th scope="row">Mittwoch</th><td>6:30 – 18:00 Uhr</td></tr>
+            <tr><th scope="row">Donnerstag</th><td>6:30 – 18:00 Uhr</td></tr>
+            <tr><th scope="row">Freitag</th><td>6:30 – 18:00 Uhr</td></tr>
+            <tr><th scope="row">Samstag</th><td>7:00 – 13:00 Uhr</td></tr>
+            <tr><th scope="row">Sonntag</th><td>8:00 – 11:00 Uhr</td></tr>
+          </tbody>
+        </table>
+      </section>
+
+      <!-- ===== KONTAKT: Platzhalter, bitte Adresse und Telefon anpassen ===== -->
+      <section aria-labelledby="kontakt-titel">
+        <h2 id="kontakt-titel">So finden Sie uns</h2>
+        <address>
+          <strong>Bäckerei Sonnenbrot</strong><br>
+          Musterstraße 1<br>
+          12345 Musterstadt
+        </address>
+        <p>Telefon: <a href="tel:+49123456789">0123 456789</a></p>
+        <a class="knopf knopf-voll" href="tel:+49123456789">Jetzt anrufen</a>
+        <a class="knopf knopf-rand" href="https://www.google.com/maps/search/?api=1&amp;query=Musterstra%C3%9Fe+1+12345+Musterstadt" target="_blank" rel="noopener">Route planen</a>
+      </section>
+
+    </div>
+  </main>
+
+  <footer>
+    <div class="inhalt">
+      <p>© Bäckerei Sonnenbrot</p>
+      <!-- Impressum: Inhaber, Anschrift und Kontakt ergänzen (in Deutschland Pflicht) -->
+      <p>Impressum: Inhaber Max Mustermann · Musterstraße 1 · 12345 Musterstadt · info@example.com</p>
+    </div>
+  </footer>
+
+</body>
+</html>
