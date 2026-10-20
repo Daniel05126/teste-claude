@@ -280,6 +280,8 @@
     ];
     const BUCHSTABEN = "ABCDEFGHIJ";
     const ID_PRAEFIX = "schiffe-versenken-";
+    const AUFDECKUNG_FRIST = 30000;
+    let fristTimer = null;
     // Für Tests kann ein eigener Vermittlungsserver gesetzt werden, sonst gilt der öffentliche von PeerJS
     const PEER_OPTIONEN = window.SCHIFFE_PEER_OPTIONEN || {};
 
@@ -311,6 +313,7 @@
         log: [],          // gemeinsame Schussliste: { wer, x, y, art, zellen?, ende? }
         offen: null,      // eigener Schuss, auf dessen Antwort wir warten
         aufdeckung: null, // Aufstellung des Gegners nach Spielende
+        endeZeit: null,
         revancheIch: false,
         revancheGegner: false,
       };
@@ -429,19 +432,49 @@
       return { art: "versenkt", zellen: flotte[i], ende: alleVersenkt || undefined };
     }
 
+    // ---------- Nachrichten des Gegners prüfen ----------
+    // Alles, was über die Verbindung kommt, kann von einem veränderten Spiel stammen.
+    const istKoord = v => Number.isInteger(v) && v >= 0 && v < GROESSE;
+    const istRunde = v => Number.isInteger(v) && v >= 1;
+    const istHash = v => typeof v === "string" && /^[0-9a-f]{64}$/.test(v);
+
+    // Ein gerades, lückenloses Schiff der Länge 2–5 innerhalb des Felds
+    function istSchiff(zellen, laenge) {
+      if (!Array.isArray(zellen) || zellen.length < 2 || zellen.length > 5) return false;
+      if (laenge !== undefined && zellen.length !== laenge) return false;
+      if (!zellen.every(z => Array.isArray(z) && z.length === 2 && istKoord(z[0]) && istKoord(z[1]))) return false;
+      const [x, y] = zellen[0];
+      const waag = zellen[1][1] === y;
+      return JSON.stringify(zellen) === JSON.stringify(zellenFuer(x, y, zellen.length, waag));
+    }
+
+    function istAufstellung(a) {
+      return !!a && typeof a.salz === "string" && a.salz.length <= 100 &&
+        Array.isArray(a.flotte) && a.flotte.length === FLOTTE.length &&
+        a.flotte.every((zellen, i) => istSchiff(zellen, FLOTTE[i].laenge));
+    }
+
+    // Antwort auf den eigenen offenen Schuss; liefert einen sauberen Eintrag oder null
+    function pruefeAntwort(e) {
+      if (!e || typeof e !== "object" || !s.offen) return null;
+      if (e.wer !== s.rolle || e.x !== s.offen.x || e.y !== s.offen.y) return null;
+      if (e.art === "wasser" || e.art === "treffer") return { wer: e.wer, x: e.x, y: e.y, art: e.art };
+      if (e.art !== "versenkt" || !istSchiff(e.zellen)) return null;
+      // Alle Felder des versenkten Schiffs müssen von uns getroffen worden sein, eines davon mit diesem Schuss
+      const getroffen = ([a, b]) => (a === e.x && b === e.y) ||
+        s.log.some(l => l.wer === s.rolle && l.x === a && l.y === b && l.art === "treffer");
+      if (!e.zellen.some(([a, b]) => a === e.x && b === e.y) || !e.zellen.every(getroffen)) return null;
+      const eintrag = { wer: e.wer, x: e.x, y: e.y, art: "versenkt", zellen: e.zellen.map(([a, b]) => [a, b]) };
+      if (e.ende === true) eintrag.ende = true;
+      return eintrag;
+    }
+
     async function pruefeGegner() {
       const a = s.aufdeckung;
       if (!a) return null;
+      if (a.ungueltig) return "Der Gegner hat eine ungültige Aufstellung geschickt.";
       if ((await hashFlotte(a.flotte, a.salz)) !== s.gegnerHash) return "Die Aufstellung passt nicht zum Fingerabdruck vom Spielbeginn.";
-      const gueltig = Array.isArray(a.flotte) && a.flotte.length === FLOTTE.length &&
-        a.flotte.every((zellen, i) => {
-          if (!Array.isArray(zellen) || zellen.length !== FLOTTE[i].laenge) return false;
-          const [x, y] = zellen[0];
-          const waag = zellen.length > 1 && zellen[1][1] === y;
-          return JSON.stringify(zellen) === JSON.stringify(zellenFuer(x, y, zellen.length, waag)) &&
-            passt(zellen, a.flotte, i);
-        });
-      if (!gueltig) return "Die Aufstellung des Gegners verstößt gegen die Regeln.";
+      if (!a.flotte.every((zellen, i) => passt(zellen, a.flotte, i))) return "Die Aufstellung des Gegners verstößt gegen die Regeln.";
       const schuesse = [];
       for (const e of s.log.filter(e => e.wer === s.rolle)) {
         const soll = ergebnisFuer(a.flotte, schuesse, e.x, e.y);
@@ -464,7 +497,7 @@
     }
 
     function beantworteSchuss(m) {
-      if (m.runde !== s.runde || phase() !== "spiel") return;
+      if (m.runde !== s.runde || phase() !== "spiel" || !istKoord(m.x) || !istKoord(m.y)) return;
       const vorher = s.log.find(e => e.wer !== s.rolle && e.x === m.x && e.y === m.y);
       if (vorher) {
         // Doppelt angekommen, z. B. nach Verbindungsabbruch: gleiche Antwort noch einmal
@@ -474,6 +507,7 @@
       const schuesse = s.log.filter(e => e.wer !== s.rolle).map(e => [e.x, e.y]);
       const eintrag = { wer: anderer(s.rolle), x: m.x, y: m.y, ...ergebnisFuer(s.flotte, schuesse, m.x, m.y) };
       s.log.push(eintrag);
+      if (eintrag.ende) s.endeZeit = Date.now();
       speichere();
       sende({ typ: "ergebnis", runde: s.runde, index: s.log.length - 1, eintrag });
       if (eintrag.ende) sendeAufdeckung();
@@ -481,11 +515,14 @@
     }
 
     function nimmErgebnis(m) {
-      if (m.runde !== s.runde || m.index !== s.log.length) return;
-      s.log.push(m.eintrag);
+      if (m.runde !== s.runde || m.index !== s.log.length || phase() !== "spiel") return;
+      const eintrag = pruefeAntwort(m.eintrag);
+      if (!eintrag) return;
+      s.log.push(eintrag);
       s.offen = null;
+      if (eintrag.ende) s.endeZeit = Date.now();
       speichere();
-      if (m.eintrag.ende) sendeAufdeckung();
+      if (eintrag.ende) sendeAufdeckung();
       zeichne();
     }
 
@@ -539,7 +576,7 @@
       });
       peer.on("connection", c => {
         c.on("data", m => {
-          if (m.typ !== "hallo" || c === conn) return;
+          if (!m || m.typ !== "hallo" || c === conn || typeof m.token !== "string" || m.token.length > 64) return;
           // Nur der erste Gast darf mitspielen; er erkennt sich an seinem Token
           if (s.gastToken && m.token !== s.gastToken) {
             c.send({ typ: "voll" });
@@ -634,6 +671,8 @@
     }
 
     function verarbeite(m) {
+      if (!m || typeof m !== "object" || typeof m.typ !== "string") return;
+      if (m.typ !== "voll" && !istRunde(m.runde)) return;
       switch (m.typ) {
         case "hallo": return gleicheAb(m);
         case "voll":
@@ -641,24 +680,30 @@
           setzeVerbindung("Dieses Spiel hat schon zwei Spieler.", "fehler");
           return;
         case "bereit":
-          if (m.runde === s.runde) { s.gegnerHash = m.hash; speichere(); zeichne(); }
+          if (m.runde === s.runde && istHash(m.hash) && !s.gegnerHash) { s.gegnerHash = m.hash; speichere(); zeichne(); }
           return;
         case "schuss": return beantworteSchuss(m);
         case "ergebnis": return nimmErgebnis(m);
         case "aufdeckung":
-          if (m.runde === s.runde && !s.aufdeckung) {
-            s.aufdeckung = { flotte: m.flotte, salz: m.salz };
+          if (m.runde === s.runde && !s.aufdeckung && phase() === "ende") {
+            nimmAufdeckung(m);
             speichere();
             zeichne();
           }
           return;
         case "revanche":
-          if (m.runde !== s.runde) return;
+          if (m.runde !== s.runde || phase() !== "ende") return;
           s.revancheGegner = true;
           if (s.revancheIch) starteRevanche();
           else { speichere(); zeichne(); }
           return;
       }
+    }
+
+    function nimmAufdeckung(a) {
+      s.aufdeckung = istAufstellung(a)
+        ? { flotte: a.flotte.map(z => z.map(([x, y]) => [x, y])), salz: a.salz }
+        : { ungueltig: true };
     }
 
     // Nach (Wieder-)Verbindung: beide Seiten bringen sich auf denselben Stand
@@ -672,18 +717,27 @@
         setzeVerbindung("Unterschiedlicher Spielstand – bitte Seite neu laden.", "fehler");
         return;
       }
-      if (m.hash) s.gegnerHash = m.hash;
-      // Wer zuletzt geantwortet hat, kann einen Eintrag mehr haben; der andere übernimmt ihn
-      if (m.log.length > s.log.length && s.log.every((e, i) => e.x === m.log[i].x && e.y === m.log[i].y && e.wer === m.log[i].wer)) {
-        s.log = m.log;
+      if (istHash(m.hash) && !s.gegnerHash) s.gegnerHash = m.hash;
+      // Ging die Antwort auf unseren letzten Schuss verloren, hat der Gegner genau einen Eintrag mehr.
+      // Über Treffer auf dem eigenen Feld entscheidet aber nur das eigene Gerät, daher nur diesen einen prüfen.
+      if (Array.isArray(m.log) && m.log.length === s.log.length + 1 && phase() === "spiel") {
+        const eintrag = pruefeAntwort(m.log[s.log.length]);
+        if (eintrag) {
+          s.log.push(eintrag);
+          s.offen = null;
+          if (eintrag.ende) {
+            s.endeZeit = Date.now();
+            sendeAufdeckung();
+          }
+        }
       }
       if (s.offen) {
         const letzter = s.log[s.log.length - 1];
         if (letzter && letzter.wer === s.rolle && letzter.x === s.offen.x && letzter.y === s.offen.y) s.offen = null;
         else sende({ typ: "schuss", runde: s.runde, x: s.offen.x, y: s.offen.y });
       }
-      if (m.aufdeckung && !s.aufdeckung) s.aufdeckung = m.aufdeckung;
-      if (m.revanche) s.revancheGegner = true;
+      if (m.aufdeckung && !s.aufdeckung && phase() === "ende") nimmAufdeckung(m.aufdeckung);
+      if (m.revanche === true && phase() === "ende") s.revancheGegner = true;
       if (s.revancheIch && s.revancheGegner) return starteRevanche();
       speichere();
       zeichne();
@@ -884,8 +938,16 @@
         melde(letzter.wer === s.rolle ? "Gewonnen! Du hast alle Schiffe versenkt. 🎉" : "Verloren – dein Gegner hat alle deine Schiffe versenkt.");
         const pr = $("pruefung");
         if (!s.aufdeckung) {
-          pr.className = "pruefung";
-          pr.textContent = "Warte auf die Aufstellung des Gegners zur Kontrolle …";
+          const rest = (s.endeZeit || 0) + AUFDECKUNG_FRIST - Date.now();
+          if (rest > 0) {
+            pr.className = "pruefung";
+            pr.textContent = "Warte auf die Aufstellung des Gegners zur Kontrolle …";
+            clearTimeout(fristTimer);
+            fristTimer = setTimeout(zeichne, rest + 100);
+          } else {
+            pr.className = "pruefung schlecht";
+            pr.textContent = "⚠ Der Gegner hat seine Aufstellung nicht offengelegt – das Ergebnis lässt sich nicht überprüfen.";
+          }
         } else {
           pruefeGegner().then(fehler => {
             pr.className = "pruefung " + (fehler ? "schlecht" : "ok");
