@@ -1,0 +1,26 @@
+# Beispiel: so sehen die beiden Dienste in deiner docker-compose.yml aus.
+# Übernimm den Dienst "spiele-relay" und die markierten Zeilen beim nginx-Dienst
+# in deine bestehende Datei. Die Pfade gehen davon aus, dass das Repository unter
+# /opt/teste-claude liegt (siehe ANLEITUNG.md).
+
+services:
+  nginx:
+    image: nginx:alpine          # dein bestehender nginx-Dienst
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      # ... deine bisherigen Einträge bleiben ...
+      # NEU: die Spiele (nur lesend)
+      - /opt/teste-claude/heimnetz/www:/usr/share/nginx/spiele:ro
+      # NEU: die Konfiguration für die Spiele
+      - /opt/teste-claude/heimnetz/nginx-spiele.conf:/etc/nginx/conf.d/spiele.conf:ro
+    depends_on:
+      - spiele-relay             # NEU
+
+  # NEU: Weiterleitungsdienst für Schiffe versenken
+  spiele-relay:
+    build: /opt/teste-claude/heimnetz/relay
+    restart: unless-stopped
+    # Kein "ports:" nötig – nur nginx spricht den Dienst im Docker-Netz an

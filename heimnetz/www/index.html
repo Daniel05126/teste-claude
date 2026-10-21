@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Spiele</title>
+  <style>
+    :root {
+      --creme: #FFF8EE;
+      --karte: #FFFFFF;
+      --text: #3B2A1E;
+      --text-leise: #6B5545;
+      --kruste: #A34E12;
+      --linie: #EADBC8;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      background: var(--creme);
+      color: var(--text);
+      font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      line-height: 1.5;
+    }
+
+    .inhalt {
+      max-width: 640px;
+      margin: 0 auto;
+      padding: 32px 16px 40px;
+    }
+
+    h1 {
+      font-family: Georgia, "Times New Roman", serif;
+      text-align: center;
+      font-size: 2.2rem;
+      margin: 0 0 24px;
+    }
+
+    a.spiel {
+      display: block;
+      background: var(--karte);
+      border: 1px solid var(--linie);
+      border-radius: 14px;
+      padding: 18px 20px;
+      margin-bottom: 14px;
+      color: var(--text);
+      text-decoration: none;
+    }
+    a.spiel:hover { border-color: var(--kruste); }
+    a.spiel:focus-visible { outline: 3px solid var(--kruste); outline-offset: 2px; }
+    a.spiel h2 {
+      font-family: Georgia, "Times New Roman", serif;
+      color: var(--kruste);
+      font-size: 1.4rem;
+      margin: 0 0 4px;
+    }
+    a.spiel p { margin: 0; color: var(--text-leise); }
+  </style>
+</head>
+<body>
+  <main class="inhalt">
+    <h1>Spiele</h1>
+
+    <a class="spiel" href="schiffe-versenken.html">
+      <h2>Schiffe versenken</h2>
+      <p>Zu zweit auf zwei Geräten. Erstelle ein Spiel und schicke den Einladungslink.</p>
+    </a>
+
+    <a class="spiel" href="vier-gewinnt.html">
+      <h2>Vier gewinnt</h2>
+      <p>Zu zweit an einem Gerät oder gegen den Computer.</p>
+    </a>
+
+    <a class="spiel" href="wortraten.html">
+      <h2>Wortraten</h2>
+      <p>Finde das Wort mit 6 Buchstaben – auf Deutsch, Englisch, Französisch oder Spanisch.</p>
+    </a>
+  </main>
+</body>
+</html>

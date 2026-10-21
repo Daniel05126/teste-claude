@@ -1,0 +1,996 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Schiffe versenken</title>
+  <style>
+    :root {
+      --creme: #FFF8EE;
+      --karte: #FFFFFF;
+      --text: #3B2A1E;
+      --text-leise: #6B5545;
+      --kruste: #A34E12;
+      --linie: #D9C4AA;
+      --wasser: #DCEBF0;
+      --wasser-dunkel: #8FB3C2;
+      --schiff: #7A6555;
+      --treffer: #C8361E;
+      --versenkt: #5A1A0E;
+      --gruen: #4F7A2E;
+      --honig: #FBE3A6;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      background: var(--creme);
+      color: var(--text);
+      font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      line-height: 1.5;
+    }
+
+    .inhalt {
+      max-width: 900px;
+      margin: 0 auto;
+      padding: 20px 16px 40px;
+    }
+
+    h1 {
+      font-family: Georgia, "Times New Roman", serif;
+      text-align: center;
+      margin: 0 0 12px;
+      font-size: 2rem;
+    }
+    h2 {
+      font-family: Georgia, "Times New Roman", serif;
+      font-size: 1.2rem;
+      margin: 0 0 8px;
+    }
+
+    [hidden] { display: none !important; }
+
+    button {
+      font: inherit;
+      font-weight: 700;
+      border-radius: 10px;
+      padding: 10px 16px;
+      cursor: pointer;
+      border: 2px solid var(--kruste);
+      background: transparent;
+      color: var(--kruste);
+    }
+    button.voll { background: var(--kruste); color: #fff; }
+    button:disabled { opacity: 0.45; cursor: default; }
+    button:focus-visible { outline: 3px solid var(--honig); outline-offset: 2px; }
+
+    .kasten {
+      background: var(--karte);
+      border: 1px solid var(--linie);
+      border-radius: 14px;
+      padding: 16px;
+      margin-bottom: 16px;
+    }
+    .mitte { text-align: center; }
+    .knopfreihe {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      justify-content: center;
+      margin-top: 12px;
+    }
+
+    #verbindung {
+      text-align: center;
+      font-size: 0.95rem;
+      font-weight: 600;
+      border-radius: 999px;
+      padding: 4px 14px;
+      margin: 0 auto 12px;
+      width: fit-content;
+      background: var(--honig);
+    }
+    #verbindung.ok { background: #DDEBCF; color: #2F4A1B; }
+    #verbindung.fehler { background: #F6D3CB; color: #6E1D0E; }
+
+    #status {
+      text-align: center;
+      font-size: 1.2rem;
+      font-weight: 700;
+      min-height: 1.8em;
+      margin-bottom: 12px;
+    }
+
+    .einladelink {
+      display: block;
+      width: 100%;
+      font: inherit;
+      font-size: 0.9rem;
+      padding: 8px 10px;
+      border: 1px solid var(--linie);
+      border-radius: 8px;
+      background: var(--creme);
+      color: var(--text);
+      margin-top: 8px;
+    }
+
+    /* Spielfelder */
+    .felder {
+      display: grid;
+      gap: 16px;
+      align-items: start;
+    }
+    @media (min-width: 760px) {
+      .felder.zwei { grid-template-columns: 1fr 1fr; }
+    }
+
+    .brett {
+      display: grid;
+      grid-template-columns: repeat(11, 1fr);
+      gap: 2px;
+      max-width: 420px;
+      margin: 0 auto;
+      user-select: none;
+    }
+    .brett.klein { max-width: 300px; }
+    .beschriftung {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.75rem;
+      font-weight: 700;
+      color: var(--text-leise);
+      aspect-ratio: 1;
+    }
+    .zelle {
+      aspect-ratio: 1;
+      border: 0;
+      border-radius: 3px;
+      padding: 0;
+      background: var(--wasser);
+      color: #fff;
+      font-size: clamp(0.7rem, 3.5vw, 1.1rem);
+      font-weight: 800;
+      line-height: 1;
+      cursor: default;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .brett .zelle:disabled { opacity: 1; cursor: default; }
+    .brett.ziel .zelle.frei { cursor: crosshair; }
+    .brett.ziel .zelle.frei:hover { background: var(--wasser-dunkel); }
+    .zelle.schiff { background: var(--schiff); }
+    .zelle.vorschau { background: var(--gruen); }
+    .zelle.vorschau.ungueltig { background: var(--treffer); opacity: 0.6; }
+    .zelle.wasser { background: var(--wasser); color: var(--wasser-dunkel); }
+    .zelle.treffer { background: var(--treffer); }
+    .zelle.versenkt { background: var(--versenkt); }
+    .zelle.aufgedeckt { background: var(--schiff); opacity: 0.55; }
+    .zelle.letzter { box-shadow: 0 0 0 3px var(--text); }
+
+    .flotte {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      justify-content: center;
+      margin: 12px 0 0;
+    }
+    .flotte button {
+      padding: 6px 10px;
+      font-size: 0.9rem;
+    }
+    .flotte button[aria-pressed="true"] { background: var(--kruste); color: #fff; }
+    .flotte button.gesetzt { border-style: dashed; opacity: 0.6; }
+
+    .hinweis {
+      color: var(--text-leise);
+      font-size: 0.92rem;
+      text-align: center;
+      margin: 10px 0 0;
+    }
+    .legende span {
+      display: inline-block;
+      width: 14px;
+      height: 14px;
+      border-radius: 3px;
+      vertical-align: -2px;
+      margin: 0 3px 0 8px;
+    }
+    .pruefung { font-weight: 700; }
+    .pruefung.ok { color: var(--gruen); }
+    .pruefung.schlecht { color: var(--treffer); }
+  </style>
+</head>
+<body>
+  <div class="inhalt">
+    <h1>Schiffe versenken</h1>
+
+    <!-- Start: neues Spiel anlegen -->
+    <div id="start" class="kasten mitte" hidden>
+      <p>Spiele gegen jemanden auf einem anderen Gerät. Erstelle ein Spiel und schicke den Einladungslink.</p>
+      <button type="button" class="voll" id="erstellen">Neues Spiel erstellen</button>
+    </div>
+
+    <div id="verbindung" aria-live="polite" hidden></div>
+
+    <!-- Einladung, solange noch kein Gegner da war -->
+    <div id="einladung" class="kasten mitte" hidden>
+      <h2>Gegner einladen</h2>
+      <p>Schicke diesen Link an deinen Gegner. Du kannst deine Schiffe schon aufstellen, während du wartest.</p>
+      <input class="einladelink" id="link" type="text" readonly aria-label="Einladungslink">
+      <div class="knopfreihe">
+        <button type="button" class="voll" id="teilen">Link teilen</button>
+        <button type="button" id="kopieren">Link kopieren</button>
+      </div>
+    </div>
+
+    <div id="status" aria-live="polite"></div>
+
+    <!-- Schiffe aufstellen -->
+    <div id="setzen" class="kasten" hidden>
+      <h2 class="mitte">Deine Flotte aufstellen</h2>
+      <div class="brett" id="brett-setzen" aria-label="Eigenes Feld zum Aufstellen"></div>
+      <div class="flotte" id="flotte" role="group" aria-label="Schiffe"></div>
+      <div class="knopfreihe">
+        <button type="button" id="drehen">Drehen ↻</button>
+        <button type="button" id="zufall">Zufällig aufstellen</button>
+        <button type="button" class="voll" id="fertig" disabled>Fertig</button>
+      </div>
+      <p class="hinweis">Schiff wählen, dann auf das Feld tippen, wo es beginnen soll. Ein gesetztes Schiff antippen, um es wieder aufzunehmen.</p>
+    </div>
+
+    <!-- Spiel -->
+    <div id="spiel" hidden>
+      <div class="felder zwei">
+        <div class="kasten">
+          <h2 class="mitte">Gegnerisches Feld</h2>
+          <div class="brett ziel" id="brett-gegner" aria-label="Gegnerisches Feld"></div>
+          <p class="hinweis" id="gegner-flotte"></p>
+        </div>
+        <div class="kasten">
+          <h2 class="mitte">Deine Flotte</h2>
+          <div class="brett klein" id="brett-ich" aria-label="Eigenes Feld"></div>
+          <p class="hinweis" id="eigene-flotte"></p>
+        </div>
+      </div>
+      <p class="hinweis legende">
+        <span style="background:var(--treffer)"></span>✕ Treffer
+        <span style="background:var(--versenkt)"></span>versenkt
+        <span style="background:var(--wasser)"></span>• Wasser
+      </p>
+      <div id="ende" class="kasten mitte" hidden>
+        <p id="pruefung" class="pruefung"></p>
+        <button type="button" class="voll" id="revanche">Revanche</button>
+        <p class="hinweis" id="revanche-hinweis"></p>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const GROESSE = 10;
+    const FLOTTE = [
+      { name: "Schlachtschiff", laenge: 5 },
+      { name: "Kreuzer", laenge: 4 },
+      { name: "Zerstörer", laenge: 3 },
+      { name: "Zerstörer", laenge: 3 },
+      { name: "U-Boot", laenge: 2 },
+    ];
+    const BUCHSTABEN = "ABCDEFGHIJ";
+    const ID_PRAEFIX = "schiffe-versenken-";
+    const AUFDECKUNG_FRIST = 30000;
+    let fristTimer = null;
+
+    const $ = id => document.getElementById(id);
+    const anderer = rolle => (rolle === "gast" ? "gastgeber" : "gast");
+
+    // ---------- Spielstand ----------
+    // Der Stand liegt im Browser, damit ein Neuladen oder Verbindungsabbruch das Spiel nicht beendet.
+    let code = null;
+    let s = null;
+
+    function neuerStand(rolle) {
+      return {
+        rolle,
+        token: zufallsText(24), // weist dieses Gerät gegenüber dem Server als Spieler aus
+        gegnerGesehen: false,
+        ...neueRunde(1),
+      };
+    }
+
+    function neueRunde(runde) {
+      return {
+        runde,
+        flotte: FLOTTE.map(() => null), // je Schiff: Liste von [x, y] oder null
+        bereit: false,
+        salz: null,
+        meinHash: null,
+        gegnerHash: null,
+        log: [],          // gemeinsame Schussliste: { wer, x, y, art, zellen?, ende? }
+        offen: null,      // eigener Schuss, auf dessen Antwort wir warten
+        aufdeckung: null, // Aufstellung des Gegners nach Spielende
+        endeZeit: null,
+        revancheIch: false,
+        revancheGegner: false,
+      };
+    }
+
+    function speichere() {
+      try { localStorage.setItem(ID_PRAEFIX + code, JSON.stringify(s)); } catch (e) {}
+    }
+
+    function lade(c) {
+      try { return JSON.parse(localStorage.getItem(ID_PRAEFIX + c)); } catch (e) { return null; }
+    }
+
+    function zufallsText(n) {
+      const zeichen = "abcdefghijkmnpqrstuvwxyz23456789";
+      const zahlen = crypto.getRandomValues(new Uint8Array(n));
+      return Array.from(zahlen, z => zeichen[z % zeichen.length]).join("");
+    }
+
+    // Wer anfängt, wechselt von Runde zu Runde
+    function starter() {
+      return s.runde % 2 === 1 ? "gastgeber" : "gast";
+    }
+
+    // Wer am Zug ist, ergibt sich allein aus der Schussliste: bei Treffer bleibt man dran
+    function amZug() {
+      let zug = starter();
+      for (const e of s.log) if (e.art === "wasser") zug = anderer(zug);
+      return zug;
+    }
+
+    function phase() {
+      if (!s.bereit) return "setzen";
+      if (!s.gegnerHash) return "warten";
+      if (s.log.some(e => e.ende)) return "ende";
+      return "spiel";
+    }
+
+    function schiffAn(flotte, x, y) {
+      return flotte.findIndex(z => z && z.some(([a, b]) => a === x && b === y));
+    }
+
+    // ---------- Aufstellen ----------
+    let gewaehlt = 0;
+    let waagerecht = true;
+    let vorschau = null;
+
+    function zellenFuer(x, y, laenge, waag) {
+      return Array.from({ length: laenge }, (_, i) => (waag ? [x + i, y] : [x, y + i]));
+    }
+
+    function passt(zellen, flotte, ohne) {
+      return zellen.every(([x, y]) =>
+        x >= 0 && y >= 0 && x < GROESSE && y < GROESSE &&
+        flotte.every((z, i) => i === ohne || !z || !z.some(([a, b]) => a === x && b === y)));
+    }
+
+    function zufaelligeFlotte() {
+      const flotte = FLOTTE.map(() => null);
+      FLOTTE.forEach((schiff, i) => {
+        for (;;) {
+          const waag = Math.random() < 0.5;
+          const x = Math.floor(Math.random() * GROESSE);
+          const y = Math.floor(Math.random() * GROESSE);
+          const zellen = zellenFuer(x, y, schiff.laenge, waag);
+          if (passt(zellen, flotte, i)) { flotte[i] = zellen; break; }
+        }
+      });
+      return flotte;
+    }
+
+    function setzeAufFeld(x, y) {
+      if (s.bereit) return;
+      const getroffen = schiffAn(s.flotte, x, y);
+      if (getroffen >= 0) {
+        // Gesetztes Schiff wieder aufnehmen
+        s.flotte[getroffen] = null;
+        gewaehlt = getroffen;
+      } else {
+        if (gewaehlt < 0) return melde("Wähle zuerst ein Schiff aus.");
+        const zellen = zellenFuer(x, y, FLOTTE[gewaehlt].laenge, waagerecht);
+        if (!passt(zellen, s.flotte, gewaehlt)) return melde("Da passt das Schiff nicht hin.");
+        s.flotte[gewaehlt] = zellen;
+        // Danach automatisch das nächste noch fehlende Schiff wählen
+        gewaehlt = s.flotte.findIndex(z => !z);
+      }
+      vorschau = null;
+      speichere();
+      zeichne();
+    }
+
+    async function fertig() {
+      if (s.flotte.some(z => !z)) return;
+      s.salz = zufallsText(24);
+      s.meinHash = await hashFlotte(s.flotte, s.salz);
+      s.bereit = true;
+      speichere();
+      sende({ typ: "bereit", runde: s.runde, hash: s.meinHash });
+      zeichne();
+    }
+
+    // ---------- Fairness ----------
+    // Vor dem Spiel wird nur ein Fingerabdruck der Aufstellung geschickt, am Ende die Aufstellung selbst.
+    async function hashFlotte(flotte, salz) {
+      const daten = new TextEncoder().encode(JSON.stringify({ flotte, salz }));
+      const hash = await crypto.subtle.digest("SHA-256", daten);
+      return Array.from(new Uint8Array(hash), b => b.toString(16).padStart(2, "0")).join("");
+    }
+
+    function ergebnisFuer(flotte, schuesse, x, y) {
+      const i = schiffAn(flotte, x, y);
+      if (i < 0) return { art: "wasser" };
+      const getroffen = z => schuesse.some(([a, b]) => a === z[0] && b === z[1]) || (z[0] === x && z[1] === y);
+      if (!flotte[i].every(getroffen)) return { art: "treffer" };
+      const alleVersenkt = flotte.every(schiff => schiff.every(getroffen));
+      return { art: "versenkt", zellen: flotte[i], ende: alleVersenkt || undefined };
+    }
+
+    // ---------- Nachrichten des Gegners prüfen ----------
+    // Alles, was über die Verbindung kommt, kann von einem veränderten Spiel stammen.
+    const istKoord = v => Number.isInteger(v) && v >= 0 && v < GROESSE;
+    const istRunde = v => Number.isInteger(v) && v >= 1;
+    const istHash = v => typeof v === "string" && /^[0-9a-f]{64}$/.test(v);
+
+    // Ein gerades, lückenloses Schiff der Länge 2–5 innerhalb des Felds
+    function istSchiff(zellen, laenge) {
+      if (!Array.isArray(zellen) || zellen.length < 2 || zellen.length > 5) return false;
+      if (laenge !== undefined && zellen.length !== laenge) return false;
+      if (!zellen.every(z => Array.isArray(z) && z.length === 2 && istKoord(z[0]) && istKoord(z[1]))) return false;
+      const [x, y] = zellen[0];
+      const waag = zellen[1][1] === y;
+      return JSON.stringify(zellen) === JSON.stringify(zellenFuer(x, y, zellen.length, waag));
+    }
+
+    function istAufstellung(a) {
+      return !!a && typeof a.salz === "string" && a.salz.length <= 100 &&
+        Array.isArray(a.flotte) && a.flotte.length === FLOTTE.length &&
+        a.flotte.every((zellen, i) => istSchiff(zellen, FLOTTE[i].laenge));
+    }
+
+    // Antwort auf den eigenen offenen Schuss; liefert einen sauberen Eintrag oder null
+    function pruefeAntwort(e) {
+      if (!e || typeof e !== "object" || !s.offen) return null;
+      if (e.wer !== s.rolle || e.x !== s.offen.x || e.y !== s.offen.y) return null;
+      if (e.art === "wasser" || e.art === "treffer") return { wer: e.wer, x: e.x, y: e.y, art: e.art };
+      if (e.art !== "versenkt" || !istSchiff(e.zellen)) return null;
+      // Alle Felder des versenkten Schiffs müssen von uns getroffen worden sein, eines davon mit diesem Schuss
+      const getroffen = ([a, b]) => (a === e.x && b === e.y) ||
+        s.log.some(l => l.wer === s.rolle && l.x === a && l.y === b && l.art === "treffer");
+      if (!e.zellen.some(([a, b]) => a === e.x && b === e.y) || !e.zellen.every(getroffen)) return null;
+      const eintrag = { wer: e.wer, x: e.x, y: e.y, art: "versenkt", zellen: e.zellen.map(([a, b]) => [a, b]) };
+      if (e.ende === true) eintrag.ende = true;
+      return eintrag;
+    }
+
+    async function pruefeGegner() {
+      const a = s.aufdeckung;
+      if (!a) return null;
+      if (a.ungueltig) return "Der Gegner hat eine ungültige Aufstellung geschickt.";
+      if ((await hashFlotte(a.flotte, a.salz)) !== s.gegnerHash) return "Die Aufstellung passt nicht zum Fingerabdruck vom Spielbeginn.";
+      if (!a.flotte.every((zellen, i) => passt(zellen, a.flotte, i))) return "Die Aufstellung des Gegners verstößt gegen die Regeln.";
+      const schuesse = [];
+      for (const e of s.log.filter(e => e.wer === s.rolle)) {
+        const soll = ergebnisFuer(a.flotte, schuesse, e.x, e.y);
+        if (soll.art !== e.art || !!soll.ende !== !!e.ende) {
+          return `Bei ${BUCHSTABEN[e.x]}${e.y + 1} hat der Gegner falsch geantwortet.`;
+        }
+        schuesse.push([e.x, e.y]);
+      }
+      return "";
+    }
+
+    // ---------- Schießen ----------
+    function schiesse(x, y) {
+      if (phase() !== "spiel" || amZug() !== s.rolle || s.offen || !verbunden()) return;
+      if (s.log.some(e => e.wer === s.rolle && e.x === x && e.y === y)) return;
+      s.offen = { x, y };
+      speichere();
+      sende({ typ: "schuss", runde: s.runde, x, y });
+      zeichne();
+    }
+
+    function beantworteSchuss(m) {
+      if (m.runde !== s.runde || phase() !== "spiel" || !istKoord(m.x) || !istKoord(m.y)) return;
+      const vorher = s.log.find(e => e.wer !== s.rolle && e.x === m.x && e.y === m.y);
+      if (vorher) {
+        // Doppelt angekommen, z. B. nach Verbindungsabbruch: gleiche Antwort noch einmal
+        return sende({ typ: "ergebnis", runde: s.runde, index: s.log.indexOf(vorher), eintrag: vorher });
+      }
+      if (amZug() === s.rolle) return;
+      const schuesse = s.log.filter(e => e.wer !== s.rolle).map(e => [e.x, e.y]);
+      const eintrag = { wer: anderer(s.rolle), x: m.x, y: m.y, ...ergebnisFuer(s.flotte, schuesse, m.x, m.y) };
+      s.log.push(eintrag);
+      if (eintrag.ende) s.endeZeit = Date.now();
+      speichere();
+      sende({ typ: "ergebnis", runde: s.runde, index: s.log.length - 1, eintrag });
+      if (eintrag.ende) sendeAufdeckung();
+      zeichne();
+    }
+
+    function nimmErgebnis(m) {
+      if (m.runde !== s.runde || m.index !== s.log.length || phase() !== "spiel") return;
+      const eintrag = pruefeAntwort(m.eintrag);
+      if (!eintrag) return;
+      s.log.push(eintrag);
+      s.offen = null;
+      if (eintrag.ende) s.endeZeit = Date.now();
+      speichere();
+      if (eintrag.ende) sendeAufdeckung();
+      zeichne();
+    }
+
+    function sendeAufdeckung() {
+      sende({ typ: "aufdeckung", runde: s.runde, flotte: s.flotte, salz: s.salz });
+    }
+
+    // ---------- Verbindung ----------
+    // Beide Spieler verbinden sich mit dem Weiterleitungsdienst auf demselben Server wie diese Seite.
+    // Nachrichten des Servers beginnen mit "!", die des Gegners sind JSON-Objekte.
+    const WS_PFAD = "/spiele-ws";
+    let ws = null;
+    let gegnerDa = false;
+    let verbindungsText = "";
+    let verbindungsArt = "";
+    let wiederholung = null;
+    let versuche = 0;
+    let aufgegeben = false;
+    let neuErstellt = false;
+    let fehlerText = "";
+
+    function verbunden() {
+      return !!(ws && ws.readyState === WebSocket.OPEN && gegnerDa);
+    }
+
+    function setzeVerbindung(text, art) {
+      verbindungsText = text;
+      verbindungsArt = art || "";
+      zeichne();
+    }
+
+    function sende(nachricht) {
+      if (verbunden()) ws.send(JSON.stringify(nachricht));
+    }
+
+    function hallo() {
+      return {
+        typ: "hallo",
+        runde: s.runde,
+        hash: s.bereit ? s.meinHash : null,
+        log: s.log,
+        revanche: s.revancheIch,
+        aufdeckung: phase() === "ende" ? { flotte: s.flotte, salz: s.salz } : null,
+      };
+    }
+
+    function verbinde() {
+      clearTimeout(wiederholung);
+      if (aufgegeben) return;
+      const url = new URL(WS_PFAD, location.href);
+      url.protocol = location.protocol === "https:" ? "wss:" : "ws:";
+      url.search = new URLSearchParams({ spiel: code, rolle: s.rolle, token: s.token });
+      url.hash = "";
+      const socket = new WebSocket(url);
+      ws = socket;
+      gegnerDa = false;
+
+      socket.onopen = () => {
+        versuche = 0;
+        setzeVerbindung(s.rolle === "gastgeber" && !s.gegnerGesehen ? "Warte auf deinen Gegner …" : "Verbinde …");
+      };
+      socket.onmessage = ereignis => {
+        if (ws !== socket || typeof ereignis.data !== "string") return;
+        let m;
+        try { m = JSON.parse(ereignis.data[0] === "!" ? ereignis.data.slice(1) : ereignis.data); } catch (e) { return; }
+        if (ereignis.data[0] !== "!") return verarbeite(m);
+        if (m.typ === "_status") gegnerStatus(m.gegner === true);
+        if (m.typ === "_fehler") verbindungsFehler(m.grund);
+      };
+      socket.onclose = () => {
+        if (ws !== socket) return;
+        ws = null;
+        gegnerDa = false;
+        if (aufgegeben) return;
+        setzeVerbindung(fehlerText || "Keine Verbindung zum Server. Neuer Versuch …", "fehler");
+        fehlerText = "";
+        // Immer länger warten: 1, 2, 4, 8, dann alle 15 Sekunden
+        wiederholung = setTimeout(verbinde, Math.min(15000, 1000 * 2 ** versuche++));
+      };
+    }
+
+    function gegnerStatus(da) {
+      neuErstellt = false;
+      gegnerDa = da;
+      if (da) {
+        if (!s.gegnerGesehen) {
+          s.gegnerGesehen = true;
+          speichere();
+        }
+        setzeVerbindung("Gegner verbunden", "ok");
+        sende(hallo());
+      } else if (s.gegnerGesehen) {
+        setzeVerbindung("Verbindung zum Gegner unterbrochen. Warte auf ihn …", "fehler");
+      } else {
+        setzeVerbindung(s.rolle === "gastgeber" ? "Warte auf deinen Gegner …" : "Verbinde …");
+      }
+    }
+
+    function verbindungsFehler(grund) {
+      if (grund === "belegt" && neuErstellt) {
+        // Den Spielcode gibt es zufällig schon: mit einem neuen Code noch einmal
+        try { localStorage.removeItem(ID_PRAEFIX + code); } catch (e) {}
+        code = zufallsText(8);
+        speichere();
+        history.replaceState(null, "", "#spiel=" + code);
+        versuche = 0;
+        return;
+      }
+      if (grund === "voll" || grund === "belegt") {
+        aufgegeben = true;
+        setzeVerbindung(grund === "voll" ? "Dieses Spiel hat schon zwei Spieler." : "Dieses Spiel gehört einem anderen Gerät.", "fehler");
+        return;
+      }
+      fehlerText = grund === "unbekannt"
+        ? "Spiel nicht gefunden. Ist der Gastgeber noch da? Neuer Versuch …"
+        : "Der Server ist ausgelastet. Neuer Versuch …";
+    }
+
+    function verarbeite(m) {
+      if (!m || typeof m !== "object" || typeof m.typ !== "string") return;
+      if (!istRunde(m.runde)) return;
+      switch (m.typ) {
+        case "hallo": return gleicheAb(m);
+        case "bereit":
+          if (m.runde === s.runde && istHash(m.hash) && !s.gegnerHash) { s.gegnerHash = m.hash; speichere(); zeichne(); }
+          return;
+        case "schuss": return beantworteSchuss(m);
+        case "ergebnis": return nimmErgebnis(m);
+        case "aufdeckung":
+          if (m.runde === s.runde && !s.aufdeckung && phase() === "ende") {
+            nimmAufdeckung(m);
+            speichere();
+            zeichne();
+          }
+          return;
+        case "revanche":
+          if (m.runde !== s.runde || phase() !== "ende") return;
+          s.revancheGegner = true;
+          if (s.revancheIch) starteRevanche();
+          else { speichere(); zeichne(); }
+          return;
+      }
+    }
+
+    function nimmAufdeckung(a) {
+      s.aufdeckung = istAufstellung(a)
+        ? { flotte: a.flotte.map(z => z.map(([x, y]) => [x, y])), salz: a.salz }
+        : { ungueltig: true };
+    }
+
+    // Nach (Wieder-)Verbindung: beide Seiten bringen sich auf denselben Stand
+    function gleicheAb(m) {
+      if (m.runde === s.runde + 1 && s.revancheIch) starteRevanche();
+      if (m.runde < s.runde) {
+        // Der Gegner hat die Revanche noch nicht mitbekommen: unseren Stand noch einmal schicken
+        return sende(hallo());
+      }
+      if (m.runde !== s.runde) {
+        setzeVerbindung("Unterschiedlicher Spielstand – bitte Seite neu laden.", "fehler");
+        return;
+      }
+      if (istHash(m.hash) && !s.gegnerHash) s.gegnerHash = m.hash;
+      // Ging die Antwort auf unseren letzten Schuss verloren, hat der Gegner genau einen Eintrag mehr.
+      // Über Treffer auf dem eigenen Feld entscheidet aber nur das eigene Gerät, daher nur diesen einen prüfen.
+      if (Array.isArray(m.log) && m.log.length === s.log.length + 1 && phase() === "spiel") {
+        const eintrag = pruefeAntwort(m.log[s.log.length]);
+        if (eintrag) {
+          s.log.push(eintrag);
+          s.offen = null;
+          if (eintrag.ende) {
+            s.endeZeit = Date.now();
+            sendeAufdeckung();
+          }
+        }
+      }
+      if (s.offen) {
+        const letzter = s.log[s.log.length - 1];
+        if (letzter && letzter.wer === s.rolle && letzter.x === s.offen.x && letzter.y === s.offen.y) s.offen = null;
+        else sende({ typ: "schuss", runde: s.runde, x: s.offen.x, y: s.offen.y });
+      }
+      if (m.aufdeckung && !s.aufdeckung && phase() === "ende") nimmAufdeckung(m.aufdeckung);
+      if (m.revanche === true && phase() === "ende") s.revancheGegner = true;
+      if (s.revancheIch && s.revancheGegner) return starteRevanche();
+      speichere();
+      zeichne();
+    }
+
+    function wuenscheRevanche() {
+      if (phase() !== "ende") return;
+      s.revancheIch = true;
+      sende({ typ: "revanche", runde: s.runde });
+      if (s.revancheGegner) starteRevanche();
+      else { speichere(); zeichne(); }
+    }
+
+    function starteRevanche() {
+      Object.assign(s, neueRunde(s.runde + 1));
+      gewaehlt = 0;
+      speichere();
+      zeichne();
+    }
+
+    // ---------- Darstellung ----------
+    function baueBrett(el, klick, ueber) {
+      const zellen = [];
+      el.appendChild(document.createElement("span"));
+      for (let x = 0; x < GROESSE; x++) {
+        const b = document.createElement("span");
+        b.className = "beschriftung";
+        b.textContent = BUCHSTABEN[x];
+        el.appendChild(b);
+      }
+      for (let y = 0; y < GROESSE; y++) {
+        const b = document.createElement("span");
+        b.className = "beschriftung";
+        b.textContent = y + 1;
+        el.appendChild(b);
+        zellen.push([]);
+        for (let x = 0; x < GROESSE; x++) {
+          const z = document.createElement(klick ? "button" : "span");
+          if (klick) {
+            z.type = "button";
+            z.addEventListener("click", () => klick(x, y));
+          }
+          if (ueber) {
+            z.addEventListener("mouseenter", () => ueber(x, y));
+          }
+          z.className = "zelle";
+          el.appendChild(z);
+          zellen[y].push(z);
+        }
+      }
+      if (ueber) el.addEventListener("mouseleave", () => ueber(null));
+      return zellen;
+    }
+
+    const zellenSetzen = baueBrett($("brett-setzen"), setzeAufFeld, (x, y) => {
+      vorschau = x === null || x === undefined ? null : [x, y];
+      zeichneSetzen();
+    });
+    const zellenGegner = baueBrett($("brett-gegner"), schiesse);
+    const zellenIch = baueBrett($("brett-ich"));
+
+    function feldName(x, y) {
+      return BUCHSTABEN[x] + (y + 1);
+    }
+
+    function melde(text) {
+      $("status").textContent = text;
+    }
+
+    function zeichne() {
+      if (!s) return;
+      const p = phase();
+
+      $("verbindung").hidden = !verbindungsText;
+      $("verbindung").textContent = verbindungsText;
+      $("verbindung").className = verbindungsArt;
+
+      const zeigeEinladung = s.rolle === "gastgeber" && !s.gegnerGesehen;
+      $("einladung").hidden = !zeigeEinladung;
+      if (zeigeEinladung) $("link").value = einladungsLink();
+
+      $("setzen").hidden = p !== "setzen" && p !== "warten";
+      $("spiel").hidden = p !== "spiel" && p !== "ende";
+
+      if (p === "setzen") melde("Stelle deine Schiffe auf.");
+      if (p === "warten") melde("Fertig! Warte, bis dein Gegner seine Schiffe aufgestellt hat …");
+      if (p === "setzen" || p === "warten") zeichneSetzen();
+      if (p === "spiel" || p === "ende") zeichneSpiel(p);
+    }
+
+    function zeichneSetzen() {
+      const flotteEl = $("flotte");
+      if (flotteEl.children.length !== FLOTTE.length) {
+        flotteEl.innerHTML = "";
+        FLOTTE.forEach((schiff, i) => {
+          const b = document.createElement("button");
+          b.type = "button";
+          b.addEventListener("click", () => {
+            if (s.bereit) return;
+            gewaehlt = i;
+            zeichneSetzen();
+          });
+          flotteEl.appendChild(b);
+        });
+      }
+      FLOTTE.forEach((schiff, i) => {
+        const b = flotteEl.children[i];
+        b.textContent = `${schiff.name} (${schiff.laenge})`;
+        b.setAttribute("aria-pressed", String(i === gewaehlt && !s.bereit));
+        b.classList.toggle("gesetzt", !!s.flotte[i]);
+        b.disabled = s.bereit;
+      });
+
+      let vorschauZellen = [];
+      let vorschauOk = false;
+      if (vorschau && !s.bereit && gewaehlt >= 0 && !s.flotte[gewaehlt]) {
+        vorschauZellen = zellenFuer(vorschau[0], vorschau[1], FLOTTE[gewaehlt].laenge, waagerecht);
+        vorschauOk = passt(vorschauZellen, s.flotte, gewaehlt);
+      }
+      for (let y = 0; y < GROESSE; y++) {
+        for (let x = 0; x < GROESSE; x++) {
+          const z = zellenSetzen[y][x];
+          const i = schiffAn(s.flotte, x, y);
+          const inVorschau = vorschauZellen.some(([a, b]) => a === x && b === y);
+          z.className = "zelle" + (i >= 0 ? " schiff" : "") + (inVorschau ? " vorschau" + (vorschauOk ? "" : " ungueltig") : "");
+          z.setAttribute("aria-label", feldName(x, y) + (i >= 0 ? ": " + FLOTTE[i].name : ": Wasser"));
+          z.disabled = s.bereit;
+        }
+      }
+      $("drehen").textContent = waagerecht ? "Drehen ↻ (waagerecht)" : "Drehen ↻ (senkrecht)";
+      $("drehen").disabled = $("zufall").disabled = s.bereit;
+      $("fertig").disabled = s.bereit || s.flotte.some(z => !z);
+    }
+
+    function zeichneSpiel(p) {
+      const meine = s.log.filter(e => e.wer === s.rolle);
+      const seine = s.log.filter(e => e.wer !== s.rolle);
+      const letzter = s.log[s.log.length - 1];
+
+      // Gegnerisches Feld
+      const versenktBeiGegner = meine.filter(e => e.art === "versenkt").flatMap(e => e.zellen);
+      const ichDran = p === "spiel" && amZug() === s.rolle && !s.offen && verbunden();
+      $("brett-gegner").classList.toggle("ziel", ichDran);
+      for (let y = 0; y < GROESSE; y++) {
+        for (let x = 0; x < GROESSE; x++) {
+          const z = zellenGegner[y][x];
+          const e = meine.find(e => e.x === x && e.y === y);
+          const versenkt = versenktBeiGegner.some(([a, b]) => a === x && b === y);
+          let klasse = "zelle";
+          let zeichen = "";
+          let text = "unbekannt";
+          if (versenkt) { klasse += " versenkt"; zeichen = "✕"; text = "versenkt"; }
+          else if (e && e.art === "treffer") { klasse += " treffer"; zeichen = "✕"; text = "Treffer"; }
+          else if (e) { klasse += " wasser"; zeichen = "•"; text = "Wasser"; }
+          else if (s.offen && s.offen.x === x && s.offen.y === y) { zeichen = "…"; text = "Schuss unterwegs"; }
+          else if (p === "ende" && s.aufdeckung && schiffAn(s.aufdeckung.flotte, x, y) >= 0) { klasse += " aufgedeckt"; text = "Schiff (aufgedeckt)"; }
+          else klasse += " frei";
+          if (letzter && letzter.wer === s.rolle && letzter.x === x && letzter.y === y) klasse += " letzter";
+          z.className = klasse;
+          z.textContent = zeichen;
+          z.setAttribute("aria-label", `${feldName(x, y)}: ${text}`);
+          z.disabled = !ichDran || !!e;
+        }
+      }
+
+      // Eigenes Feld
+      for (let y = 0; y < GROESSE; y++) {
+        for (let x = 0; x < GROESSE; x++) {
+          const z = zellenIch[y][x];
+          const e = seine.find(e => e.x === x && e.y === y);
+          const i = schiffAn(s.flotte, x, y);
+          const versenkt = i >= 0 && seine.some(e => e.art === "versenkt" && schiffAn(s.flotte, e.x, e.y) === i);
+          let klasse = "zelle" + (i >= 0 ? " schiff" : "");
+          let zeichen = "";
+          if (e && versenkt) { klasse += " versenkt"; zeichen = "✕"; }
+          else if (e && e.art !== "wasser") { klasse += " treffer"; zeichen = "✕"; }
+          else if (e) { klasse += " wasser"; zeichen = "•"; }
+          if (letzter && letzter.wer !== s.rolle && letzter.x === x && letzter.y === y) klasse += " letzter";
+          z.className = klasse;
+          z.textContent = zeichen;
+        }
+      }
+
+      const restGegner = FLOTTE.length - meine.filter(e => e.art === "versenkt").length;
+      const restIch = FLOTTE.length - seine.filter(e => e.art === "versenkt").length;
+      $("gegner-flotte").textContent = `Noch ${restGegner} von ${FLOTTE.length} Schiffen übrig`;
+      $("eigene-flotte").textContent = `Noch ${restIch} von ${FLOTTE.length} Schiffen übrig`;
+
+      if (p === "spiel") {
+        const zuletzt = letzter ? ` (${feldName(letzter.x, letzter.y)}: ${{ wasser: "Wasser", treffer: "Treffer!", versenkt: "Versenkt!" }[letzter.art]})` : "";
+        if (s.offen) melde("Schuss auf " + feldName(s.offen.x, s.offen.y) + " …");
+        else if (amZug() === s.rolle) melde((letzter && letzter.wer === s.rolle && letzter.art !== "wasser" ? "Nochmal schießen!" : "Du bist dran – schieß auf das gegnerische Feld.") + zuletzt);
+        else melde("Dein Gegner ist dran …" + zuletzt);
+      }
+
+      $("ende").hidden = p !== "ende";
+      if (p === "ende") {
+        melde(letzter.wer === s.rolle ? "Gewonnen! Du hast alle Schiffe versenkt. 🎉" : "Verloren – dein Gegner hat alle deine Schiffe versenkt.");
+        const pr = $("pruefung");
+        if (!s.aufdeckung) {
+          const rest = (s.endeZeit || 0) + AUFDECKUNG_FRIST - Date.now();
+          if (rest > 0) {
+            pr.className = "pruefung";
+            pr.textContent = "Warte auf die Aufstellung des Gegners zur Kontrolle …";
+            clearTimeout(fristTimer);
+            fristTimer = setTimeout(zeichne, rest + 100);
+          } else {
+            pr.className = "pruefung schlecht";
+            pr.textContent = "⚠ Der Gegner hat seine Aufstellung nicht offengelegt – das Ergebnis lässt sich nicht überprüfen.";
+          }
+        } else {
+          pruefeGegner().then(fehler => {
+            pr.className = "pruefung " + (fehler ? "schlecht" : "ok");
+            pr.textContent = fehler ? "⚠ " + fehler : "✓ Der Gegner hat fair gespielt.";
+          });
+        }
+        $("revanche").disabled = s.revancheIch;
+        $("revanche-hinweis").textContent = s.revancheIch
+          ? "Warte, bis dein Gegner auch Revanche möchte …"
+          : s.revancheGegner ? "Dein Gegner möchte eine Revanche!" : "";
+      }
+    }
+
+    function einladungsLink() {
+      return location.href.split("#")[0] + "#spiel=" + code;
+    }
+
+    // ---------- Knöpfe ----------
+    $("erstellen").addEventListener("click", () => {
+      $("start").hidden = true;
+      code = zufallsText(8);
+      s = neuerStand("gastgeber");
+      neuErstellt = true;
+      speichere();
+      history.replaceState(null, "", "#spiel=" + code);
+      verbinde();
+      zeichne();
+    });
+    $("drehen").addEventListener("click", () => {
+      waagerecht = !waagerecht;
+      zeichneSetzen();
+    });
+    $("zufall").addEventListener("click", () => {
+      s.flotte = zufaelligeFlotte();
+      gewaehlt = -1;
+      speichere();
+      zeichne();
+    });
+    $("fertig").addEventListener("click", fertig);
+    $("revanche").addEventListener("click", wuenscheRevanche);
+    $("teilen").addEventListener("click", async () => {
+      const daten = { title: "Schiffe versenken", text: "Spiel Schiffe versenken gegen mich:", url: einladungsLink() };
+      if (navigator.share) {
+        try { await navigator.share(daten); } catch (e) {}
+      } else {
+        kopiere();
+      }
+    });
+    $("kopieren").addEventListener("click", kopiere);
+
+    async function kopiere() {
+      try {
+        await navigator.clipboard.writeText(einladungsLink());
+        $("kopieren").textContent = "Kopiert ✓";
+      } catch (e) {
+        $("link").select();
+        $("kopieren").textContent = "Bitte manuell kopieren";
+      }
+      setTimeout(() => ($("kopieren").textContent = "Link kopieren"), 2500);
+    }
+
+    // ---------- Start ----------
+    const treffer = location.hash.match(/spiel=([a-z0-9]+)/);
+    if (treffer) {
+      code = treffer[1];
+      s = lade(code);
+      if (!s) {
+        s = neuerStand("gast");
+        speichere();
+      }
+      verbinde();
+      zeichne();
+    } else {
+      $("start").hidden = false;
+    }
+    window.addEventListener("hashchange", () => {
+      const neu = location.hash.match(/spiel=([a-z0-9]+)/);
+      if (neu && neu[1] !== code) location.reload();
+    });
+  </script>
+</body>
+</html>
